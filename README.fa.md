@@ -1,12 +1,5 @@
 
 
-
-نصب اسکریپت
-```
-bash <(curl -Ls https://raw.githubusercontent.com/Mehdi682007/PD-Element/main/install.sh)
-```
----
-
 # 🇮🇷 نسخه فارسی
 
 ## 🧩 معرفی
@@ -131,9 +124,7 @@ bash <(curl -Ls https://raw.githubusercontent.com/Mehdi682007/PD-Element/main/in
 ## 🚀 نصب سریع
 
 ```bash
-wget https://your-repo-link/script.sh
-chmod +x script.sh
-sudo ./script.sh
+bash <(curl -Ls https://raw.githubusercontent.com/Mehdi682007/PD-Element/main/install.sh)
 ```
 
 ---
