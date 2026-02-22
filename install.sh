@@ -31,7 +31,6 @@ read -r -d '' ASCII_BANNER <<'BANNER'
 BANNER
 
 
-
 #############################################
 # Helpers
 #############################################
@@ -711,6 +710,103 @@ toggle_registration() {
 }
 
 #############################################
+# Call Diagnostics (TURN/WebRTC troubleshooting)
+#############################################
+
+call_diagnostics() {
+  print_header
+  echo "📞 === Call Diagnostics (TURN/WebRTC) ==="
+  echo
+
+  if ! load_config; then
+    echo "⚠️  Config not found at ${CONFIG_FILE}. Some checks will be limited."
+  fi
+
+  ensure_pkg coturn
+  ensure_pkg curl
+  ensure_pkg iproute2
+
+  echo "🧠 Services:"
+  systemctl is-active --quiet coturn && echo "✅ coturn: active" || echo "❌ coturn: NOT active"
+  systemctl is-active --quiet matrix-synapse && echo "✅ matrix-synapse: active" || echo "❌ matrix-synapse: NOT active"
+  echo
+
+  echo "🧷 TURN ports listening (server-side):"
+  ss -lunpt | grep -E ':(3478|5349)\b' || echo "❌ Not listening on 3478/5349 (check coturn config/service)."
+  echo
+
+  echo "🧾 TURN configuration summary:"
+  if [[ -f /etc/turnserver.conf ]]; then
+    echo "----- /etc/turnserver.conf (important lines) -----"
+    grep -E '^(listening-port|tls-listening-port|listening-ip|relay-ip|external-ip|realm|server-name|min-port|max-port|use-auth-secret|static-auth-secret|cert=|pkey=)' /etc/turnserver.conf || true
+    echo "--------------------------------------------------"
+  else
+    echo "❌ /etc/turnserver.conf not found."
+  fi
+  echo
+
+  echo "🔥 Firewall quick check (UFW if available):"
+  if command -v ufw >/dev/null 2>&1; then
+    ufw status verbose || true
+    echo
+    echo "Expected UFW rules (at minimum):"
+    echo " - 3478/udp, 3478/tcp, 5349/tcp"
+    echo " - 49160:49200/udp (TURN relay ports)"
+  else
+    echo "⚠️  UFW not installed. If you use cloud firewall, check it there."
+    echo "Required ports:"
+    echo " - UDP 3478"
+    echo " - TCP 3478"
+    echo " - TCP 5349"
+    echo " - UDP 49160-49200 (relay ports)"
+  fi
+  echo
+
+  echo "🌐 Public reachability (informational):"
+  if [[ -n "${PUBLIC_IP:-}" ]]; then
+    echo "Public IP set in config: ${PUBLIC_IP}"
+  else
+    echo "Public IP not loaded from config."
+  fi
+  echo
+
+  echo "🧪 Synapse TURN config file:"
+  if [[ -f /etc/matrix-synapse/conf.d/turn.yaml ]]; then
+    cat /etc/matrix-synapse/conf.d/turn.yaml
+  else
+    echo "❌ /etc/matrix-synapse/conf.d/turn.yaml not found."
+  fi
+  echo
+
+  echo "🧪 Matrix client endpoint (if domain known):"
+  if [[ -n "${HS_DOMAIN:-}" ]]; then
+    if curl -fsS "https://${HS_DOMAIN}/_matrix/client/versions" >/dev/null 2>&1; then
+      echo "✅ https://${HS_DOMAIN}/_matrix/client/versions OK"
+    else
+      echo "❌ Cannot reach https://${HS_DOMAIN}/_matrix/client/versions"
+      echo "   This can also break call setup in clients."
+    fi
+  else
+    echo "⚠️  HS_DOMAIN not known (run Install first)."
+  fi
+  echo
+
+  echo "📜 Recent coturn logs (last 80 lines):"
+  journalctl -u coturn -n 80 --no-pager || true
+  echo
+
+  echo "📌 If calls stay on 'Connecting', the most common cause is:"
+  echo " - UDP relay ports are blocked (49160-49200/udp) in server firewall OR cloud firewall."
+  echo " - Or external-ip is wrong (NAT scenario)."
+  echo
+  echo "Tip: Try a test call, then immediately run this diagnostics and check for:"
+  echo " - 'allocation timeout' in coturn logs."
+  echo
+
+  pause
+}
+
+#############################################
 # Health Check
 #############################################
 
@@ -932,7 +1028,6 @@ update_element_web() {
       ;;
     2)
       echo "Fetching latest version..."
-      # Get tag_name like "v1.12.7"
       local tag
       tag="$(curl -fsS https://api.github.com/repos/element-hq/element-web/releases/latest | jq -r '.tag_name')"
       if [[ -z "${tag}" || "${tag}" == "null" ]]; then
@@ -1058,7 +1153,7 @@ main_menu() {
     echo "2)  👑 Create admin user (interactive)"
     echo "3)  👤 Create normal user (interactive)"
     echo "4)  🎲 Create user with RANDOM password (auto)"
-    echo "5)  ♻️  Reactivate user (exists-ok)"
+    echo "5)  ♻️ Reactivate user (exists-ok)"
     echo "6)  📋 List users"
     echo "7)  🚫 Deactivate user (safe)"
     echo "8)  📦 Set upload limits (Nginx + Synapse)"
@@ -1066,12 +1161,13 @@ main_menu() {
     echo "10) 🔎 Health Check"
     echo "11) 🧰 Fix Wizard (auto-fix common issues)"
     echo "12) 💾 Backup server"
-    echo "13) ♻️  Restore backup"
-    echo "14) ⬆️  Update Element Web"
-    echo "15) 🧨 Full uninstall / purge"
-    echo "16) 🚪 Exit"
+    echo "13) ♻️ Restore backup"
+    echo "14) 📞 Call Diagnostics (TURN/WebRTC)"
+    echo "15) ⬆️  Update Element Web"
+    echo "16) 🧨 Full uninstall / purge"
+    echo "17) 🚪 Exit"
     echo "=================================="
-    read -rp "Choose an option [1-16]: " CHOICE
+    read -rp "Choose an option [1-17]: " CHOICE
 
     case "${CHOICE}" in
       1)  install_stack ;;
@@ -1087,9 +1183,10 @@ main_menu() {
       11) fix_wizard ;;
       12) backup_server ;;
       13) restore_backup ;;
-      14) update_element_web ;;
-      15) full_uninstall ;;
-      16) echo "Bye."; exit 0 ;;
+      14) call_diagnostics ;;
+      15) update_element_web ;;
+      16) full_uninstall ;;
+      17) echo "Bye."; exit 0 ;;
       *)  echo "Invalid option."; sleep 1 ;;
     esac
   done
