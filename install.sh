@@ -11,7 +11,7 @@ LOG_FILE="/var/log/matrix_stack_install.log"
 exec > >(tee -a "$LOG_FILE") 2>&1
 
 CONFIG_FILE="/etc/matrix-stack.conf"
-VERSION="1.4"
+VERSION="1.5"
 
 read -r -d '' ASCII_BANNER <<'BANNER'
 ╔════════════════════════════════════════════════════════════════════════════════════════════════╗
