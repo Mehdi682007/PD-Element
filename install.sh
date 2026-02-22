@@ -2,7 +2,7 @@
 set -uo pipefail
 
 #############################################
-# Matrix Stack Manager - v1.4
+# Matrix Stack Manager - v1.5
 # Telegram: https://t.me/MYoutub
 # YouTube:  https://www.youtube.com/@ParsDigital
 #############################################
